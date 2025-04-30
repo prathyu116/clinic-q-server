@@ -1,6 +1,8 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const Booking = require('../models/Booking');
+const { protect } = require('../middleware/authMiddleware'); // Import the protection middleware
+
 
 const router = express.Router();
 
@@ -42,13 +44,11 @@ router.get('/queue', async (req, res) => {
         const activeQueue = await getActiveQueue();
         const patientView = activeQueue.map((booking, index) => ({
             position: index + 1,
-            // Optional: return masked name or just position for privacy
-            // patientName: `Patient #${index + 1}`
         }));
         res.json({
             queue: patientView,
-            currentPatient: activeQueue.length > 0 ? activeQueue[0].patientName : "No patients waiting",
-            nextPatient: activeQueue.length > 1 ? activeQueue[1].patientName : "No next patient",
+            currentPatient: activeQueue.length > 0 ? `Patient #${activeQueue[0].bookingId.substring(0, 4)}` : "No patients waiting", // Mask name
+            nextPatient: activeQueue.length > 1 ? `Patient #${activeQueue[1].bookingId.substring(0, 4)}` : "No next patient", // Mask name
             totalWaiting: activeQueue.length
         });
     } catch (error) {
@@ -75,6 +75,7 @@ router.get('/bookings/:bookingId', async (req, res) => {
                 status: booking.status,
                 position: position > 0 ? position : 'Not in active queue', // Should be > 0 if status is Waiting
                 bookingTime: booking.bookingTime,
+                bookingId: booking.bookingId, // Include bookingId in response
             });
         } else {
             res.json({
@@ -82,6 +83,7 @@ router.get('/bookings/:bookingId', async (req, res) => {
                 status: booking.status,
                 position: null, // Not applicable if Done or Cancelled
                 bookingTime: booking.bookingTime,
+                bookingId: booking.bookingId, // Include bookingId in response
             });
         }
     } catch (error) {
@@ -94,14 +96,10 @@ router.get('/bookings/:bookingId', async (req, res) => {
 router.delete('/bookings/:bookingId', async (req, res) => {
     try {
         const { bookingId } = req.params;
-        // Option 1: Delete the booking
-        // const result = await Booking.findOneAndDelete({ bookingId: bookingId, status: 'Waiting' });
-
-        // Option 2: Mark as Cancelled (better for history)
         const result = await Booking.findOneAndUpdate(
             { bookingId: bookingId, status: 'Waiting' },
             { status: 'Cancelled' },
-            { new: true } // Return the updated document
+            { new: true }
         );
 
         if (!result) {
@@ -116,14 +114,12 @@ router.delete('/bookings/:bookingId', async (req, res) => {
 
 
 // --- Admin Routes ---
-
-// GET /api/admin/queue - Get detailed active queue for admin
-router.get('/admin/queue', async (req, res) => {
+// GET /api/admin/queue
+router.get('/admin/queue', protect, async (req, res) => { // <-- Added 'protect'
     try {
         const activeQueue = await getActiveQueue();
-        // Return necessary details including MongoDB _id for marking done
         res.json(activeQueue.map(b => ({
-            _id: b._id, // Important for marking done
+            _id: b._id,
             patientName: b.patientName,
             bookingTime: b.bookingTime,
             bookingId: b.bookingId
@@ -134,23 +130,19 @@ router.get('/admin/queue', async (req, res) => {
     }
 });
 
-// PATCH /api/admin/bookings/:id/done - Mark patient as done (using MongoDB _id)
-router.patch('/admin/bookings/:id/done', async (req, res) => {
+// PATCH /api/admin/bookings/:id/done
+router.patch('/admin/bookings/:id/done', protect, async (req, res) => { // <-- Added 'protect'
     try {
-        const { id } = req.params; // This is the MongoDB _id
-
+        const { id } = req.params;
         const updatedBooking = await Booking.findByIdAndUpdate(
             id,
             { status: 'Done' },
-            { new: true } // Return the updated document
+            { new: true }
         );
 
         if (!updatedBooking) {
             return res.status(404).json({ message: 'Booking not found.' });
         }
-
-        // Optional: Could trigger something here (e.g., notify next patient via websockets later)
-
         res.json({ message: `Patient ${updatedBooking.patientName} marked as done.` });
     } catch (error) {
         console.error("Mark done error:", error);
@@ -160,5 +152,7 @@ router.patch('/admin/bookings/:id/done', async (req, res) => {
         res.status(500).json({ message: 'Server error marking booking as done.' });
     }
 });
+
+
 
 module.exports = router;
