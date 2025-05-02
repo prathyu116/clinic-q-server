@@ -39,7 +39,7 @@ router.post('/login', async (req, res) => {
         res.cookie('token', token, {
             httpOnly: true, // Cannot be accessed by client-side JS
             secure: process.env.NODE_ENV === 'production', // Only send over HTTPS in production
-            sameSite: process.env.NODE_ENV 'production' ? 'None' : 'Lax',
+            sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
             maxAge: parseInt(process.env.JWT_EXPIRES_IN) * 60 * 60 * 1000 || 3600000, // Cookie expiry in ms
         });
 
@@ -58,7 +58,7 @@ router.post('/logout', (req, res) => {
         httpOnly: true,
         expires: new Date(0), // Set expiry date to the past
         secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV 'production' ? 'None' : 'Lax',
+        sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
     });
     res.status(200).json({ message: 'Logout successful' });
 });
