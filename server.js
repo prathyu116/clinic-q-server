@@ -20,7 +20,7 @@ mongoose.connect(MONGODB_URI)
 // --- Middleware ---
 // Configure CORS to allow credentials (cookies) from your frontend origin
 app.use(cors({
-    origin: 'http://localhost:5173', // Your frontend URL
+    origin: 'https://clinic-queue-manager.vercel.app', // Your frontend URL
     credentials: true, // Allow cookies
 }));
 app.use(express.json());
